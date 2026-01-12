@@ -73,21 +73,33 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
 
   const handleBpmDetection = useCallback(
     (data: BpmCandidates) => {
-      if (data.bpm?.[0]) {
-        const bpm = Math.round(data.bpm[0].tempo);
-
-        setBpmState({
-          bpm,
-          error: null,
-          status: 'detected',
-        });
-
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-
-        stopListening();
+      // Validate that we have valid BPM data
+      if (
+        !data.bpm
+        || !Array.isArray(data.bpm)
+        || data.bpm.length === 0
+        || !data.bpm[0]
+        || typeof data.bpm[0].tempo !== 'number'
+        || Number.isNaN(data.bpm[0].tempo)
+        || data.bpm[0].tempo <= 0
+      ) {
+        return;
       }
+
+      const bpm = Math.round(data.bpm[0].tempo);
+
+      setBpmState({
+        bpm,
+        error: null,
+        status: 'detected',
+      });
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      stopListening();
     },
     [
       stopListening,

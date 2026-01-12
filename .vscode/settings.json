@@ -1,0 +1,27 @@
+{
+  "cSpell.words": [
+    "analyzer",
+    "Neue",
+    "Roboto",
+    "Segoe"
+  ],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "explicit",
+    "source.sort.json": "explicit"
+  },
+  "editor.defaultFoldingRangeProvider": "biomejs.biome",
+  "editor.defaultFormatter": "biomejs.biome",
+  "files.autoSave": "onFocusChange",
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/.next/**": true,
+    "**/dist/**": true,
+    "**/node_modules/**": true
+  },
+  "typescript.preferences.autoImportFileExcludePatterns": [
+    "**/node_modules/@radix-ui/**"
+  ],
+  "typescript.preferences.preferTypeOnlyAutoImports": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

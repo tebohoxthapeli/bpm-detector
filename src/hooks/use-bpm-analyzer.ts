@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BpmAnalyzer, BpmCandidates } from 'realtime-bpm-analyzer';
-import { createRealtimeBpmAnalyzer } from 'realtime-bpm-analyzer';
+import {
+  createRealtimeBpmAnalyzer,
+  getBiquadFilter,
+} from 'realtime-bpm-analyzer';
 
 export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   const { detectionTimeout = 15000 } = options;
@@ -15,6 +18,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   const analyzerRef = useRef<BpmAnalyzer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopListening = useCallback(() => {
@@ -29,6 +33,12 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       analyzerRef.current.stop();
       analyzerRef.current.disconnect();
       analyzerRef.current = null;
+    }
+
+    // Disconnect filter node
+    if (filterRef.current) {
+      filterRef.current.disconnect();
+      filterRef.current = null;
     }
 
     // Disconnect source node
@@ -137,6 +147,10 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       const audioContext = new AudioContextConstructor();
       audioContextRef.current = audioContext;
 
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
@@ -149,8 +163,12 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       const analyzer = await createRealtimeBpmAnalyzer(audioContext);
       analyzerRef.current = analyzer;
 
-      source.connect(analyzer.node);
+      const filter = getBiquadFilter(audioContext);
+      filterRef.current = filter;
 
+      source.connect(filter).connect(analyzer.node);
+
+      analyzer.on('bpm', handleBpmDetection);
       analyzer.on('bpmStable', handleBpmDetection);
 
       timeoutRef.current = setTimeout(handleDetectionTimeout, detectionTimeout);

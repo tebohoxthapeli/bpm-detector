@@ -1,7 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 
-import { useBPMAnalyzer } from '../hooks/use-bpm-analyzer';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
+import { useBPMAnalyzer } from '@/hooks/use-bpm-analyzer';
 
 export function ResultScreen() {
   const { bpm, status, reset } = useBPMAnalyzer();
@@ -11,9 +11,9 @@ export function ResultScreen() {
   }
 
   return (
-    <div className='flex flex-col items-center gap-8'>
+    <div className='mx-auto flex w-full max-w-md flex-col items-center gap-8'>
       <Button
-        className='absolute top-6 left-6'
+        className='fixed top-6 left-6 border border-white/10 bg-white/5 text-muted-foreground backdrop-blur-md hover:bg-white/10 hover:text-foreground'
         onClick={reset}
         size='sm'
         variant='ghost'
@@ -25,10 +25,28 @@ export function ResultScreen() {
         Back
       </Button>
 
-      <div className='space-y-4 text-center'>
-        <div className='text-lg text-muted-foreground'>Detected BPM</div>
-        <div className='font-bold text-9xl text-primary'>{bpm}</div>
-        <div className='text-muted-foreground text-xl'>BPM</div>
+      <div className='w-full rounded-2xl border border-white/10 bg-white/5 p-8 text-center shadow-black/35 shadow-xl backdrop-blur-md'>
+        <div className='font-medium text-muted-foreground text-xs tracking-widest'>
+          RESULT
+        </div>
+
+        <div className='mt-3 text-muted-foreground text-sm'>Detected tempo</div>
+
+        <div className='mt-5 font-mono font-semibold text-8xl text-foreground tabular-nums leading-none tracking-tight'>
+          {bpm}
+        </div>
+
+        <div className='mt-2 text-muted-foreground text-sm'>BPM</div>
+
+        <div className='mt-7 flex justify-center'>
+          <Button
+            className='min-w-56'
+            onClick={reset}
+            size='lg'
+          >
+            Detect another
+          </Button>
+        </div>
       </div>
     </div>
   );

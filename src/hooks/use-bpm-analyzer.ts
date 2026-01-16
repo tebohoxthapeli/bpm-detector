@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BpmAnalyzer, BpmCandidates } from 'realtime-bpm-analyzer';
 import { createRealtimeBpmAnalyzer } from 'realtime-bpm-analyzer';
 
+function isValidBpmData(data: BpmCandidates): boolean {
+  const tempo = data.bpm?.[0]?.tempo;
+  return (
+    Array.isArray(data.bpm)
+    && data.bpm.length > 0
+    && typeof tempo === 'number'
+    && !Number.isNaN(tempo)
+    && tempo > 0
+  );
+}
+
 export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   const { detectionTimeout = 15000 } = options;
 
@@ -18,6 +29,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isRunningRef = useRef<boolean>(false);
+  const stopListeningRef = useRef<() => Promise<void>>();
 
   console.log('[BPM Hook] Component rendering with current state:', bpmState);
   console.log('[BPM Hook] isRunning flag:', isRunningRef.current);
@@ -29,201 +41,84 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
     stream: !!streamRef.current,
   });
 
-  const stopListening = useCallback(async () => {
-    console.log(
-      '[BPM Hook] ==================== STOP LISTENING ===================='
-    );
-
-    console.log(
-      '[BPM Hook] Stop called, current isRunning:',
-      isRunningRef.current
-    );
-
-    if (!isRunningRef.current) {
-      console.log('[BPM Hook] Not running, skipping stop');
-      return;
-    }
-
-    isRunningRef.current = false;
-    console.log('[BPM Hook] Set isRunning to false');
-
+  const clearDetectionTimeout = useCallback(() => {
     if (timeoutRef.current) {
-      console.log('[BPM Hook] Clearing timeout');
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
-    } else {
-      console.log('[BPM Hook] No timeout to clear');
     }
+  }, []);
 
-    if (analyzerRef.current) {
-      console.log('[BPM Hook] Removing bpmStable event listener');
-
-      try {
-        const bpmHandler = (data: BpmCandidates) => {
-          console.log(
-            '[BPM Hook] ==================== BPM DETECTION EVENT ===================='
-          );
-
-          console.log(
-            '[BPM Hook] BpmDetection event received with data:',
-            data
-          );
-
-          console.log('[BPM Hook] Data structure:', {
-            bpmLength: data.bpm?.length,
-            count: data.bpm?.[0]?.count,
-            firstBpm: data.bpm?.[0],
-            hasBpm: !!data.bpm,
-            isBpmArray: Array.isArray(data.bpm),
-            tempo: data.bpm?.[0]?.tempo,
-          });
-
-          if (
-            !data.bpm
-            || !Array.isArray(data.bpm)
-            || data.bpm.length === 0
-            || !data.bpm[0]
-            || typeof data.bpm[0].tempo !== 'number'
-            || Number.isNaN(data.bpm[0].tempo)
-            || data.bpm[0].tempo <= 0
-          ) {
-            console.log('[BPM Hook] Invalid BPM data, ignoring detection');
-            return;
-          }
-
-          const bpm = Math.round(data.bpm[0].tempo);
-          console.log('[BPM Hook] Valid BPM detected:', bpm);
-          console.log('[BPM Hook] Current state before update:', bpmState);
-
-          setBpmState({
-            bpm,
-            error: null,
-            status: 'detected',
-          });
-
-          console.log('[BPM Hook] State updated to detected with BPM:', bpm);
-
-          if (timeoutRef.current) {
-            console.log(
-              '[BPM Hook] Clearing timeout after successful detection'
-            );
-
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-          } else {
-            console.log('[BPM Hook] No timeout to clear');
-          }
-
-          console.log(
-            '[BPM Hook] Calling stopListening to properly cleanup after detection'
-          );
-
-          stopListening();
-
-          console.log(
-            '[BPM Hook] ==================== BPM DETECTION COMPLETE ===================='
-          );
-        };
-
-        analyzerRef.current.on('bpmStable', bpmHandler);
-        console.log('[BPM Hook] Event listener attached');
-      } catch (error) {
-        console.error('[BPM Hook] Error setting up event listener:', error);
-      }
-
-      console.log('[BPM Hook] Stopping and disconnecting analyzer');
-
-      try {
-        analyzerRef.current.stop();
-        analyzerRef.current.disconnect();
-
-        console.log(
-          '[BPM Hook] Analyzer stopped and disconnected successfully'
-        );
-      } catch (error) {
-        console.error('[BPM Hook] Error stopping analyzer:', error);
-      }
-
-      analyzerRef.current = null;
-    } else {
-      console.log('[BPM Hook] No analyzer to stop');
+  const cleanupAnalyzer = useCallback(() => {
+    if (!analyzerRef.current) return;
+    try {
+      analyzerRef.current.stop();
+      analyzerRef.current.disconnect();
+    } catch (error) {
+      console.error('[BPM Hook] Error stopping analyzer:', error);
     }
+    analyzerRef.current = null;
+  }, []);
 
+  const cleanupAudioNodes = useCallback(() => {
     if (analyserRef.current) {
-      console.log('[BPM Hook] Disconnecting analyser');
-
       try {
         analyserRef.current.disconnect();
-        console.log('[BPM Hook] Analyser disconnected successfully');
       } catch (error) {
         console.error('[BPM Hook] Error disconnecting analyser:', error);
       }
-
       analyserRef.current = null;
-    } else {
-      console.log('[BPM Hook] No analyser to disconnect');
     }
-
     if (sourceRef.current) {
-      console.log('[BPM Hook] Disconnecting source');
-
       try {
         sourceRef.current.disconnect();
-        console.log('[BPM Hook] Source disconnected successfully');
       } catch (error) {
         console.error('[BPM Hook] Error disconnecting source:', error);
       }
-
       sourceRef.current = null;
-    } else {
-      console.log('[BPM Hook] No source to disconnect');
     }
+  }, []);
 
-    if (streamRef.current) {
-      console.log('[BPM Hook] Stopping media tracks');
-
-      try {
-        streamRef.current.getTracks().forEach((track: MediaStreamTrack) => {
-          console.log('[BPM Hook] Stopping track:', track.kind, track.label);
-          track.stop();
-        });
-
-        streamRef.current = null;
-        console.log('[BPM Hook] All media tracks stopped');
-      } catch (error) {
-        console.error('[BPM Hook] Error stopping media tracks:', error);
+  const cleanupStream = useCallback(() => {
+    if (!streamRef.current) return;
+    try {
+      for (const track of streamRef.current.getTracks()) {
+        track.stop();
       }
-    } else {
-      console.log('[BPM Hook] No stream to stop');
+    } catch (error) {
+      console.error('[BPM Hook] Error stopping media tracks:', error);
     }
+    streamRef.current = null;
+  }, []);
 
-    if (audioContextRef.current) {
-      console.log('[BPM Hook] Suspending audio context (not closing)');
-
-      try {
-        await audioContextRef.current.suspend();
-        console.log('[BPM Hook] Audio context suspended');
-      } catch (error) {
-        console.error('[BPM Hook] Error suspending audio context:', error);
-      }
-    } else {
-      console.log('[BPM Hook] No audio context to suspend');
+  const suspendAudioContext = useCallback(async () => {
+    if (!audioContextRef.current) return;
+    try {
+      await audioContextRef.current.suspend();
+    } catch (error) {
+      console.error('[BPM Hook] Error suspending audio context:', error);
     }
+  }, []);
 
-    console.log('[BPM Hook] Stop completed, final ref state:', {
-      analyser: !!analyserRef.current,
-      analyzer: !!analyzerRef.current,
-      audioContext: !!audioContextRef.current,
-      source: !!sourceRef.current,
-      stream: !!streamRef.current,
-    });
+  const stopListening = useCallback(async () => {
+    console.log('[BPM Hook] stopListening called');
+    if (!isRunningRef.current) return;
 
-    console.log(
-      '[BPM Hook] ==================== STOP COMPLETE ===================='
-    );
+    isRunningRef.current = false;
+    clearDetectionTimeout();
+    cleanupAnalyzer();
+    cleanupAudioNodes();
+    cleanupStream();
+    await suspendAudioContext();
+    console.log('[BPM Hook] stopListening complete');
   }, [
-    bpmState,
+    clearDetectionTimeout,
+    cleanupAnalyzer,
+    cleanupAudioNodes,
+    cleanupStream,
+    suspendAudioContext,
   ]);
+
+  stopListeningRef.current = stopListening;
 
   const getErrorMessage = useCallback((error: unknown): string => {
     console.log('[BPM Hook] Processing error:', error);
@@ -364,6 +259,24 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       analyzerRef.current = analyzer;
       console.log('[BPM Hook] BPM analyzer created');
 
+      analyzer.on('bpmStable', (data: BpmCandidates) => {
+        console.log('[BPM Hook] bpmStable event received:', data);
+        if (!isValidBpmData(data)) {
+          console.log('[BPM Hook] Invalid BPM data, ignoring');
+          return;
+        }
+        const bpm = Math.round(data.bpm[0]?.tempo ?? 0);
+        console.log('[BPM Hook] Valid BPM detected:', bpm);
+        setBpmState({
+          bpm,
+          error: null,
+          status: 'detected',
+        });
+        clearDetectionTimeout();
+        stopListeningRef.current?.();
+      });
+      console.log('[BPM Hook] bpmStable event listener attached');
+
       console.log('[BPM Hook] Creating analyser node');
       const analyserNode = audioContext.createAnalyser();
       analyserNode.fftSize = 2048;
@@ -420,6 +333,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       );
     }
   }, [
+    clearDetectionTimeout,
     detectionTimeout,
     getErrorMessage,
     handleDetectionTimeout,

@@ -1,20 +1,29 @@
 import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { useBPMAnalyzer } from '@/hooks/use-bpm-analyzer';
 
-export function ResultScreen() {
-  const { bpm, status, reset } = useBPMAnalyzer();
+type ResultScreenProps = {
+  bpm: number | null;
+  onReset: () => void;
+};
 
-  if (status !== 'detected') {
+export function ResultScreen({ bpm, onReset }: ResultScreenProps) {
+  console.log('[ResultScreen] Component rendering with props:', {
+    bpm: typeof bpm,
+  });
+
+  if (!bpm) {
+    console.log('[ResultScreen] No BPM, returning null');
     return null;
   }
+
+  console.log('[ResultScreen] BPM detected, rendering result screen');
 
   return (
     <div className='mx-auto flex w-full max-w-md flex-col items-center gap-8'>
       <Button
         className='fixed top-6 left-6 border border-white/10 bg-white/5 text-muted-foreground backdrop-blur-md hover:bg-white/10 hover:text-foreground'
-        onClick={reset}
+        onClick={onReset}
         size='sm'
         variant='ghost'
       >
@@ -41,7 +50,7 @@ export function ResultScreen() {
         <div className='mt-7 flex justify-center'>
           <Button
             className='min-w-56'
-            onClick={reset}
+            onClick={onReset}
             size='lg'
           >
             Detect another

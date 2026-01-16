@@ -2,17 +2,39 @@ import { IconMicrophoneFilled } from '@tabler/icons-react';
 import { Loader2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { useBPMAnalyzer } from '@/hooks/use-bpm-analyzer';
+import type { BpmStatus } from '@/hooks/use-bpm-analyzer';
 import { cn } from '@/utils';
 
-export function MicButton() {
-  const { status, error, startListening, reset } = useBPMAnalyzer();
+type MicButtonProps = {
+  status: BpmStatus;
+  errorMessage: string | null;
+  onStart: () => void;
+  onReset: () => void;
+};
+
+console.log('[MicButton] Component rendering');
+
+export function MicButton({
+  status,
+  errorMessage,
+  onStart,
+  onReset,
+}: MicButtonProps) {
+  console.log(
+    '[MicButton] Render call - status:',
+    status,
+    'error message:',
+    errorMessage
+  );
 
   if (status === 'detected') {
+    console.log('[MicButton] Status is detected, returning null');
     return null;
   }
 
   if (status === 'error') {
+    console.log('[MicButton] Status is error, rendering error UI');
+
     return (
       <div className='mx-auto w-full max-w-md'>
         <div className='rounded-2xl border border-destructive/30 bg-destructive/10 p-6 shadow-black/20 shadow-lg'>
@@ -21,13 +43,13 @@ export function MicButton() {
           </div>
 
           <div className='text-destructive/90 text-sm leading-relaxed'>
-            {error}
+            {errorMessage}
           </div>
 
           <div className='mt-6 flex justify-center'>
             <Button
               className='min-w-48 border-destructive/30 bg-background/40 text-foreground hover:bg-background/60'
-              onClick={reset}
+              onClick={onReset}
               size='lg'
               variant='outline'
             >
@@ -43,6 +65,8 @@ export function MicButton() {
     );
   }
 
+  console.log('[MicButton] Status is idle or listening, rendering button UI');
+
   return (
     <div className='mx-auto flex w-full max-w-md flex-col items-center gap-8'>
       <div className='space-y-2 text-center'>
@@ -51,7 +75,7 @@ export function MicButton() {
         </div>
 
         <div className='font-semibold text-2xl text-foreground tracking-tight'>
-          Find the tempo in real time
+          Find tempo in real time
         </div>
 
         <div className='text-muted-foreground text-sm leading-relaxed'>
@@ -85,7 +109,7 @@ export function MicButton() {
               : 'active:scale-[0.98]'
           )}
           disabled={status === 'listening'}
-          onClick={startListening}
+          onClick={onStart}
           size='iconLg'
         >
           {status === 'listening' ? (

@@ -30,7 +30,8 @@
     "verbatimModuleSyntax": true
   },
   "include": [
-    "src"
+    "src",
+    "reset.d.ts"
   ],
   "references": [
     {

@@ -1,23 +1,10 @@
 import { ArrowLeft } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 
-type ResultScreenProps = {
-  bpm: number | null;
-  onReset: () => void;
-};
-
 export function ResultScreen({ bpm, onReset }: ResultScreenProps) {
-  console.log('[ResultScreen] Component rendering with props:', {
-    bpm: typeof bpm,
-  });
-
-  if (!bpm) {
-    console.log('[ResultScreen] No BPM, returning null');
+  if (bpm === null) {
     return null;
   }
-
-  console.log('[ResultScreen] BPM detected, rendering result screen');
 
   return (
     <div className='mx-auto flex w-full max-w-md flex-col items-center gap-8'>
@@ -60,3 +47,8 @@ export function ResultScreen({ bpm, onReset }: ResultScreenProps) {
     </div>
   );
 }
+
+type ResultScreenProps = {
+  bpm: number | null;
+  onReset: () => void;
+};

@@ -133,7 +133,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
 
   stopListeningRef.current = stopListening;
 
-  const handleDetectionTimeout = useCallback(() => {
+  const handleDetectionTimeout = useCallback(async () => {
     logger.log('==================== TIMEOUT EVENT ====================');
     logger.log('Detection timeout triggered after', detectionTimeout, 'ms');
 
@@ -146,7 +146,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
     logger.log('State updated to error');
     logger.log('Calling stopListening to properly cleanup after timeout');
 
-    stopListening();
+    await stopListening();
 
     logger.log('==================== TIMEOUT COMPLETE ====================');
   }, [
@@ -238,7 +238,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
 
       logger.log('BPM analyzer created');
 
-      analyzer.on('bpmStable', (data: BpmCandidates) => {
+      analyzer.once('bpmStable', (data: BpmCandidates) => {
         logger.log('bpmStable event received:', data);
 
         if (!isValidBpmData(data)) {
@@ -303,7 +303,7 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       logger.log('State updated to error:', errorMessage);
       logger.log('Calling stopListening to clean up after error');
 
-      stopListening();
+      await stopListening();
 
       logger.log('==================== ERROR COMPLETE ====================');
     }
@@ -314,11 +314,14 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
     stopListening,
   ]);
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
     logger.log('==================== RESET ====================');
     logger.log('Reset called');
-    logger.log('Current analyzer ref:', !!analyzerRef.current);
 
+    // Stop any active listening session first
+    await stopListening();
+
+    // Reset analyzer if it exists
     if (analyzerRef.current) {
       logger.log('Calling analyzer.reset()');
 
@@ -328,8 +331,6 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       } catch (error) {
         logger.error('Error resetting analyzer:', error);
       }
-    } else {
-      logger.log('No analyzer to reset');
     }
 
     logger.log('Setting state to idle');
@@ -341,7 +342,9 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
     });
 
     logger.log('==================== RESET COMPLETE ====================');
-  }, []);
+  }, [
+    stopListening,
+  ]);
 
   useEffect(() => {
     logger.log('==================== MOUNT ====================');
@@ -350,8 +353,14 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
     return () => {
       logger.log('==================== UNMOUNT ====================');
       logger.log('Component unmounting');
-      logger.log('Closing audio context and cleaning up');
 
+      // Clean up all resources
+      clearDetectionTimeout();
+      cleanupAnalyzer();
+      cleanupAudioNodes();
+      cleanupStream();
+
+      // Close AudioContext (final cleanup)
       if (audioContextRef.current) {
         logger.log('Closing audio context');
 
@@ -365,10 +374,15 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
         audioContextRef.current = null;
       }
 
-      logger.log('Final cleanup complete');
+      isRunningRef.current = false;
       logger.log('==================== UNMOUNT COMPLETE ====================');
     };
-  }, []);
+  }, [
+    clearDetectionTimeout,
+    cleanupAnalyzer,
+    cleanupAudioNodes,
+    cleanupStream,
+  ]);
 
   logger.log('Returning state and functions:', {
     bpm: bpmState.bpm,

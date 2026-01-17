@@ -19,7 +19,11 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   const analyzerRef = useRef<BpmAnalyzer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
+  const compressorRef = useRef<DynamicsCompressorNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const meterRef = useRef<AnalyserNode | null>(null);
+  const meterIntervalRef = useRef<number | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isRunningRef = useRef<boolean>(false);
   const stopListeningRef = useRef<() => Promise<void>>();
@@ -28,7 +32,6 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   logger.log('isRunning flag:', isRunningRef.current);
 
   logger.log('Refs state:', {
-    analyser: !!analyserRef.current,
     analyzer: !!analyzerRef.current,
     audioContext: !!audioContextRef.current,
     source: !!sourceRef.current,
@@ -58,14 +61,49 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
   }, []);
 
   const cleanupAudioNodes = useCallback(() => {
-    if (analyserRef.current) {
+    if (meterIntervalRef.current) {
+      clearInterval(meterIntervalRef.current);
+      meterIntervalRef.current = null;
+    }
+
+    if (meterRef.current) {
       try {
-        analyserRef.current.disconnect();
+        meterRef.current.disconnect();
       } catch (error) {
-        logger.error('Error disconnecting analyser:', error);
+        logger.error('Error disconnecting meter:', error);
       }
 
-      analyserRef.current = null;
+      meterRef.current = null;
+    }
+
+    if (gainRef.current) {
+      try {
+        gainRef.current.disconnect();
+      } catch (error) {
+        logger.error('Error disconnecting gain:', error);
+      }
+
+      gainRef.current = null;
+    }
+
+    if (compressorRef.current) {
+      try {
+        compressorRef.current.disconnect();
+      } catch (error) {
+        logger.error('Error disconnecting compressor:', error);
+      }
+
+      compressorRef.current = null;
+    }
+
+    if (filterRef.current) {
+      try {
+        filterRef.current.disconnect();
+      } catch (error) {
+        logger.error('Error disconnecting filter:', error);
+      }
+
+      filterRef.current = null;
     }
 
     if (sourceRef.current) {
@@ -207,10 +245,14 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
         );
       }
 
-      logger.log('Requesting microphone access');
+      logger.log('Requesting microphone access (with processing disabled)');
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          autoGainControl: false,
+          echoCancellation: false,
+          noiseSuppression: false,
+        },
       });
 
       logger.log('Microphone access granted');
@@ -231,9 +273,68 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       const source = audioContext.createMediaStreamSource(stream);
       sourceRef.current = source;
 
+      logger.log('Creating audio preprocessing chain');
+
+      // 1. LowPass Filter: Isolate kick/bass frequencies (where the beat lives)
+      const filter = audioContext.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 150;
+      filter.Q.value = 1;
+      filterRef.current = filter;
+
+      logger.log('LowPass filter created at 150Hz');
+
+      // 2. Compressor: Normalize dynamics so quiet beats hit same as loud beats
+      const compressor = audioContext.createDynamicsCompressor();
+      compressor.threshold.value = -50;
+      compressor.knee.value = 40;
+      compressor.ratio.value = 12;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+      compressorRef.current = compressor;
+
+      logger.log('Compressor created');
+
+      // 3. Gain: Makeup gain after compression
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 10;
+      gainRef.current = gainNode;
+
+      logger.log('Gain node created with value:', gainNode.gain.value);
+
+      // 4. Meter: Monitor signal levels for debugging
+      const meter = audioContext.createAnalyser();
+      meter.fftSize = 2048;
+      meterRef.current = meter;
+
+      const meterBuffer = new Float32Array(meter.fftSize);
+
+      meterIntervalRef.current = window.setInterval(() => {
+        meter.getFloatTimeDomainData(meterBuffer);
+
+        let peak = 0;
+        let sum = 0;
+
+        for (const v of meterBuffer) {
+          peak = Math.max(peak, Math.abs(v));
+          sum += v * v;
+        }
+
+        const rms = Math.sqrt(sum / meterBuffer.length);
+
+        console.log('[Signal Meter]', {
+          peak: Number(peak.toFixed(4)),
+          rms: Number(rms.toFixed(4)),
+        });
+      }, 1000);
+
+      logger.log('Signal meter created');
       logger.log('Creating BPM analyzer');
 
-      const analyzer = await createRealtimeBpmAnalyzer(audioContext);
+      const analyzer = await createRealtimeBpmAnalyzer(audioContext, {
+        continuousAnalysis: true,
+        stabilizationTime: 10000,
+      });
       analyzerRef.current = analyzer;
 
       logger.log('BPM analyzer created');
@@ -260,17 +361,56 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       });
 
       logger.log('bpmStable event listener attached');
-      logger.log('Creating analyser node');
 
-      const analyserNode = audioContext.createAnalyser();
-      analyserNode.fftSize = 2048;
-      analyserRef.current = analyserNode;
+      analyzer.on('bpm', (data: BpmCandidates) => {
+        console.log('[BPM Debug] bpm event:', data);
+        logger.log('bpm event received:', data);
 
-      logger.log('Analyser node created with fftSize:', analyserNode.fftSize);
-      logger.log('Connecting audio graph: source -> analyser & analyzer');
+        if (!isValidBpmData(data)) {
+          console.log('[BPM Debug] Invalid BPM data, skipping');
+          return;
+        }
 
-      source.connect(analyserNode);
-      source.connect(analyzer.node);
+        const candidate = data.bpm[0];
+        console.log('[BPM Debug] candidate:', candidate);
+
+        if (candidate && candidate.count >= 5) {
+          const bpm = Math.round(candidate.tempo);
+          console.log(
+            '[BPM Debug] Accepting BPM:',
+            bpm,
+            'count:',
+            candidate.count
+          );
+          logger.log('Confident BPM detected:', bpm, 'count:', candidate.count);
+
+          setBpmState({
+            bpm,
+            error: null,
+            status: 'detected',
+          });
+
+          clearDetectionTimeout();
+          stopListeningRef.current?.();
+        }
+      });
+
+      logger.log('bpm event listener attached');
+
+      analyzer.on('error', errorData => {
+        logger.error('Analyzer error:', errorData.message);
+      });
+
+      logger.log('error event listener attached');
+      logger.log(
+        'Connecting audio graph: source -> filter -> compressor -> gain -> meter -> analyzer'
+      );
+
+      source.connect(filter);
+      filter.connect(compressor);
+      compressor.connect(gainNode);
+      gainNode.connect(meter);
+      meter.connect(analyzer.node);
 
       logger.log('Audio graph connected');
       logger.log('Setting detection timeout:', detectionTimeout, 'ms');
@@ -281,7 +421,6 @@ export function useBPMAnalyzer(options: UseBPMAnalyzerOptions = {}) {
       logger.log('==================== START COMPLETE ====================');
 
       logger.log('All ref states after start:', {
-        analyser: !!analyserRef.current,
         analyzer: !!analyzerRef.current,
         audioContext: !!audioContextRef.current,
         source: !!sourceRef.current,

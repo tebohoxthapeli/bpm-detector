@@ -56,3 +56,4 @@ Use `@/*` to import from `src/*` (configured in tsconfig.json and vite.config.ts
 - **Imports**: Use `import type` for type-only imports
 - **Tailwind classes**: Auto-sorted by Biome's `useSortedClasses` rule
 - **Class merging**: Use `cn()` utility (combines clsx + tailwind-merge)
+- **Logging**: Use `logger` from `src/hooks/use-bpm-analyzer/logger.ts` instead of raw `console.log`

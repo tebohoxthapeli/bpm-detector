@@ -7,12 +7,12 @@ export function ResultScreen({ bpm, onReset }: ResultScreenProps) {
   }
 
   return (
-    <div className='mx-auto flex w-full max-w-md flex-col items-center gap-8'>
+    <div className='mx-auto w-full max-w-lg'>
       <Button
-        className='fixed top-6 left-6 border border-white/10 bg-white/5 text-muted-foreground backdrop-blur-md hover:bg-white/10 hover:text-foreground'
+        className='fixed top-6 left-6 border-border/60 bg-card/40 text-muted-foreground shadow-lg backdrop-blur-md hover:text-foreground'
         onClick={onReset}
         size='sm'
-        variant='ghost'
+        variant='outline'
       >
         <ArrowLeft
           className='mr-2'
@@ -21,22 +21,22 @@ export function ResultScreen({ bpm, onReset }: ResultScreenProps) {
         Back
       </Button>
 
-      <div className='w-full rounded-2xl border border-white/10 bg-white/5 p-8 text-center shadow-black/35 shadow-xl backdrop-blur-md'>
-        <div className='font-medium text-muted-foreground text-xs tracking-widest'>
+      <div className='rounded-3xl border border-border/60 bg-card/45 p-7 text-center shadow-2xl backdrop-blur-md sm:p-10'>
+        <div className='text-muted-foreground text-xs tracking-[0.32em]'>
           RESULT
         </div>
 
         <div className='mt-3 text-muted-foreground text-sm'>Detected tempo</div>
 
-        <div className='mt-5 font-mono font-semibold text-8xl text-foreground tabular-nums leading-none tracking-tight'>
+        <div className='mt-6 bg-gradient-to-b from-primary via-primary/80 to-primary/55 bg-clip-text font-semibold text-7xl text-transparent tabular-nums leading-none tracking-tight sm:text-8xl'>
           {bpm}
         </div>
 
         <div className='mt-2 text-muted-foreground text-sm'>BPM</div>
 
-        <div className='mt-7 flex justify-center'>
+        <div className='mt-8 flex justify-center'>
           <Button
-            className='min-w-56'
+            className='min-w-60'
             onClick={onReset}
             size='lg'
           >

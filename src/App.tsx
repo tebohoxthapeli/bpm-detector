@@ -25,8 +25,8 @@ export default function App() {
   ]);
 
   return (
-    <div className='flex min-h-screen items-center justify-center bg-background text-foreground'>
-      <div className='w-full max-w-md px-6'>
+    <div className='flex min-h-svh items-center justify-center px-6 py-14 text-foreground'>
+      <div className='w-full max-w-lg'>
         <MicButton
           errorMessage={error}
           onReset={reset}
